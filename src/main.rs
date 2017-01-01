@@ -93,7 +93,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             blocks: blocks,
             data: data,
             start: 0,
-            end: 1,
+            end: 0,
             block_keys: Vec::new(),
         };
         deduplicator._store();
