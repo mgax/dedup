@@ -41,8 +41,8 @@ struct Deduplicator<'a, 'b> {
     block_size: usize,
     blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
     data: &'a [u8],
-    start: usize,
-    end: usize,
+    cursor: usize,
+    bookmark: usize,
     block_keys: Vec<Vec<u8>>,
 }
 
@@ -55,36 +55,36 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         return hash;
     }
 
-    fn block(&self) -> &[u8] {
-        &self.data[self.start .. self.end]
-    }
-
-    fn save_block(&mut self) {
-        let block_key = self.hash(self.block());
-        let block = self.block().to_vec();
+    fn save_block(&mut self, block: Vec<u8>) {
+        let block_key = self.hash(block.as_slice());
         self.blocks.insert(block_key.clone(), block);
         self.block_keys.push(block_key);
-        self.start = self.end;
+    }
+
+    fn flush_bookmark(&mut self) {
+        let block = self.data[self.bookmark .. self.cursor].to_vec();
+        self.save_block(block);
+        self.bookmark = self.cursor
     }
 
     pub fn _store(&mut self) {
         loop {
-            if self.end - self.start == self.block_size {
-                self.save_block();
+            if self.cursor - self.bookmark == self.block_size {
+                self.flush_bookmark();
             }
-            if self.end == self.data.len() {
-                if self.end > self.start {
-                    self.save_block();
+            if self.cursor == self.data.len() {
+                if self.cursor > self.bookmark {
+                    self.flush_bookmark();
                 }
                 break;
             }
 
-            self.end += 1;
-            assert!(self.end - self.start <= self.block_size);
-            assert!(self.end <= self.data.len());
+            self.cursor += 1;
+            assert!(self.cursor - self.bookmark <= self.block_size);
+            assert!(self.cursor <= self.data.len());
         }
-        assert!(self.start == self.end);
-        assert!(self.start == self.data.len());
+        assert!(self.cursor == self.bookmark);
+        assert!(self.cursor == self.data.len());
     }
 
     pub fn store(block_size: usize, data: &'a [u8], blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
@@ -92,8 +92,8 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             block_size: block_size,
             blocks: blocks,
             data: data,
-            start: 0,
-            end: 0,
+            cursor: 0,
+            bookmark: 0,
             block_keys: Vec::new(),
         };
         deduplicator._store();
