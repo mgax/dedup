@@ -54,7 +54,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         return hash;
     }
 
-    fn save_block(&mut self, block: Vec<u8>) {
+    fn save(&mut self, block: Vec<u8>) {
         let block_key = self.hash(block.as_slice());
         self.blocks.insert(block_key.clone(), block);
         self.block_keys.push(block_key);
@@ -81,7 +81,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                     },
                     None => {
                         let block = buffer.clone();
-                        self.save_block(block);
+                        self.save(block);
                         return;
                     },
                 }
@@ -94,10 +94,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                     },
                     None => {
                         let block1 = buffer[0 .. self.block_size].to_vec();
-                        self.save_block(block1);
+                        self.save(block1);
                         if buffer.len() > self.block_size {
                             let block2 = buffer[self.block_size ..].to_vec();
-                            self.save_block(block2);
+                            self.save(block2);
                         }
                         return;
                     },
@@ -105,7 +105,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             }
 
             let block = buffer.clone();
-            self.save_block(block);
+            self.save(block);
             buffer.truncate(0);
         }
     }
