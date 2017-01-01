@@ -42,7 +42,6 @@ struct Deduplicator<'a, 'b> {
     blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
     data: &'a [u8],
     cursor: usize,
-    buffer: Vec<u8>,
     block_keys: Vec<Vec<u8>>,
 }
 
@@ -73,30 +72,31 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn consume(&mut self) {
+        let mut buffer: Vec<u8> = Vec::new();
         loop {
-            while self.buffer.len() < self.block_size {
+            while buffer.len() < self.block_size {
                 match self.next_byte() {
                     Some(byte) => {
-                        self.buffer.push(byte);
+                        buffer.push(byte);
                     },
                     None => {
-                        let block = self.buffer.clone();
+                        let block = buffer.clone();
                         self.save_block(block);
                         return;
                     },
                 }
             }
 
-            while self.buffer.len() < 2 * self.block_size {
+            while buffer.len() < 2 * self.block_size {
                 match self.next_byte() {
                     Some(byte) => {
-                        self.buffer.push(byte);
+                        buffer.push(byte);
                     },
                     None => {
-                        let block1 = self.buffer[0 .. self.block_size].to_vec();
+                        let block1 = buffer[0 .. self.block_size].to_vec();
                         self.save_block(block1);
-                        if self.buffer.len() > self.block_size {
-                            let block2 = self.buffer[self.block_size ..].to_vec();
+                        if buffer.len() > self.block_size {
+                            let block2 = buffer[self.block_size ..].to_vec();
                             self.save_block(block2);
                         }
                         return;
@@ -104,9 +104,9 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 }
             }
 
-            let block = self.buffer.clone();
+            let block = buffer.clone();
             self.save_block(block);
-            self.buffer.truncate(0);
+            buffer.truncate(0);
         }
     }
 
@@ -116,7 +116,6 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             blocks: blocks,
             data: data,
             cursor: 0,
-            buffer: Vec::new(),
             block_keys: Vec::new(),
         };
         deduplicator.consume();
