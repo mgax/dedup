@@ -55,9 +55,13 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         return hash;
     }
 
+    fn block(&self) -> &[u8] {
+        &self.data[self.start .. self.start + self.size]
+    }
+
     fn save_block(&mut self) {
-        let block = self.data[self.start .. self.start + self.size].to_vec();
-        let block_key = self.hash(block.as_slice());
+        let block_key = self.hash(self.block());
+        let block = self.block().to_vec();
         self.blocks.insert(block_key.clone(), block);
         self.block_keys.push(block_key);
         self.start += self.size;
