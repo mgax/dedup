@@ -20,38 +20,8 @@ impl Store {
     }
 
     pub fn save(&mut self, key: &str, data: &[u8]) {
-        let mut block_keys: Vec<Vec<u8>> = Vec::new();
-        let mut start = 0;
-        let mut size = 1;
-
-        loop {
-            if size == self.block_size {
-                let block = data[start .. start + size].to_vec();
-                let block_key = block.clone();
-                self.blocks.insert(block_key.clone(), block);
-                block_keys.push(block_key);
-                start += size;
-                size = 0;
-            }
-            if start + size == data.len() {
-                if size > 0 {
-                    let block = data[start .. start + size].to_vec();
-                    let block_key = block.clone();
-                    self.blocks.insert(block_key.clone(), block);
-                    block_keys.push(block_key);
-                    start += size;
-                    size = 0;
-                }
-                break;
-            }
-
-            size += 1;
-            assert!(size <= self.block_size);
-            assert!(start + size <= data.len());
-        }
-        assert!(size == 0);
-        assert!(start == data.len());
-
+        let mut deduplicator = Deduplicator::new(self.block_size, data);
+        let block_keys = deduplicator.store(&mut self.blocks);
         self.files.insert(key.to_string(), block_keys);
     }
 
@@ -62,6 +32,56 @@ impl Store {
             out.extend(block.as_slice());
         }
         return out;
+    }
+}
+
+struct Deduplicator<'a> {
+    block_size: usize,
+    data: &'a [u8],
+}
+
+impl<'a> Deduplicator<'a> {
+    pub fn new(block_size: usize, data: &'a [u8]) -> Deduplicator {
+        Deduplicator{
+            block_size: block_size,
+            data: data,
+        }
+    }
+
+    pub fn store(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
+        let mut block_keys: Vec<Vec<u8>> = Vec::new();
+        let mut start = 0;
+        let mut size = 1;
+
+        loop {
+            if size == self.block_size {
+                let block = self.data[start .. start + size].to_vec();
+                let block_key = block.clone();
+                blocks.insert(block_key.clone(), block);
+                block_keys.push(block_key);
+                start += size;
+                size = 0;
+            }
+            if start + size == self.data.len() {
+                if size > 0 {
+                    let block = self.data[start .. start + size].to_vec();
+                    let block_key = block.clone();
+                    blocks.insert(block_key.clone(), block);
+                    block_keys.push(block_key);
+                    start += size;
+                    size = 0;
+                }
+                break;
+            }
+
+            size += 1;
+            assert!(size <= self.block_size);
+            assert!(start + size <= self.data.len());
+        }
+        assert!(size == 0);
+        assert!(start == self.data.len());
+
+        return block_keys;
     }
 }
 
