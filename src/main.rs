@@ -87,6 +87,23 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 }
             }
 
+            while self.buffer.len() < 2 * self.block_size {
+                match self.next_byte() {
+                    Some(byte) => {
+                        self.buffer.push(byte);
+                    },
+                    None => {
+                        let block1 = self.buffer[0 .. self.block_size].to_vec();
+                        self.save_block(block1);
+                        if self.buffer.len() > self.block_size {
+                            let block2 = self.buffer[self.block_size ..].to_vec();
+                            self.save_block(block2);
+                        }
+                        return;
+                    },
+                }
+            }
+
             let block = self.buffer.clone();
             self.save_block(block);
             self.buffer.truncate(0);
