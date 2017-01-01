@@ -1,7 +1,10 @@
 extern crate crypto;
+extern crate adler32;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
+use adler32::RollingAdler32;
 
 fn main() {
     println!("Hello, world!");
@@ -10,6 +13,7 @@ fn main() {
 struct Store {
     block_size: usize,
     blocks: HashMap<Vec<u8>, Vec<u8>>,
+    matches: HashSet<u32>,
     files: HashMap<String, Vec<Vec<u8>>>,
 }
 
@@ -18,12 +22,18 @@ impl Store {
         Store{
             block_size: block_size,
             blocks: HashMap::new(),
+            matches: HashSet::new(),
             files: HashMap::new(),
         }
     }
 
     pub fn save(&mut self, key: &str, data: &[u8]) {
-        let block_keys = Deduplicator::store(self.block_size, data, &mut self.blocks);
+        let block_keys = Deduplicator::store(
+            self.block_size,
+            data,
+            &mut self.blocks,
+            &mut self.matches,
+        );
         self.files.insert(key.to_string(), block_keys);
     }
 
@@ -40,6 +50,7 @@ impl Store {
 struct Deduplicator<'a, 'b> {
     block_size: usize,
     blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
+    matches: &'b mut HashSet<u32>,
     data: &'a [u8],
     cursor: usize,
     block_keys: Vec<Vec<u8>>,
@@ -56,7 +67,14 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
 
     fn save(&mut self, block: Vec<u8>) {
         let block_key = self.hash(block.as_slice());
-        self.blocks.insert(block_key.clone(), block);
+        if ! self.blocks.contains_key(&block_key) {
+            if block.len() == self.block_size {
+                let rollhash = RollingAdler32::from_buffer(block.as_slice()).hash();
+                self.matches.insert(rollhash);
+            }
+            self.blocks.insert(block_key.clone(), block);
+        }
+
         self.block_keys.push(block_key);
     }
 
@@ -101,10 +119,24 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 }
             }
 
+            let mut roll = RollingAdler32::from_buffer(buffer.as_slice());
+
             while buffer.len() < 2 * block_size {
+                if self.matches.contains(&roll.hash()) {
+                    let offset = buffer.len() - block_size;
+                    let hash = self.hash(&buffer[offset ..]);
+                    if self.blocks.contains_key(&hash) {
+                        self.flushn(&mut buffer, offset);
+                        break;
+                    }
+                }
+
                 match self.next_byte() {
                     Some(byte) => {
+                        roll.remove(self.block_size,
+                            buffer[buffer.len() - self.block_size]);
                         buffer.push(byte);
+                        roll.update(byte);
                     },
                     None => {
                         self.flushn(&mut buffer, block_size);
@@ -120,10 +152,16 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         }
     }
 
-    pub fn store(block_size: usize, data: &'a [u8], blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
+    pub fn store(
+        block_size: usize,
+        data: &'a [u8],
+        blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
+        matches: &'b mut HashSet<u32>,
+    ) -> Vec<Vec<u8>> {
         let mut deduplicator = Deduplicator{
             block_size: block_size,
             blocks: blocks,
+            matches: matches,
             data: data,
             cursor: 0,
             block_keys: Vec::new(),
@@ -147,7 +185,7 @@ mod tests {
     fn two_small_files() {
         let mut store = super::Store::new(4);
         let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
-        let fox_two = "the quack brewn fox jumped over lazy dog".as_bytes();
+        let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
         store.save("fox_one", fox_one);
         store.save("fox_two", fox_two);
         assert_eq!(store.load("fox_one"), fox_one);

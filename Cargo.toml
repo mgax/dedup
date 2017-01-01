@@ -5,3 +5,4 @@ authors = ["Alex Morega <alex@grep.ro>"]
 
 [dependencies]
 rust-crypto = "^0.2"
+adler32 = "0.3.0"
