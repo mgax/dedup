@@ -42,7 +42,7 @@ struct Deduplicator<'a, 'b> {
     blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
     data: &'a [u8],
     cursor: usize,
-    bookmark: usize,
+    buffer: Vec<u8>,
     block_keys: Vec<Vec<u8>>,
 }
 
@@ -61,30 +61,36 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         self.block_keys.push(block_key);
     }
 
-    fn flush_bookmark(&mut self) {
-        let block = self.data[self.bookmark .. self.cursor].to_vec();
-        self.save_block(block);
-        self.bookmark = self.cursor
+    fn next_byte(&mut self) -> Option<u8> {
+        if self.cursor < self.data.len() {
+            let rv = self.data[self.cursor];
+            self.cursor += 1;
+            Some(rv)
+        }
+        else {
+            None
+        }
     }
 
-    pub fn _store(&mut self) {
+    fn consume(&mut self) {
         loop {
-            if self.cursor - self.bookmark == self.block_size {
-                self.flush_bookmark();
-            }
-            if self.cursor == self.data.len() {
-                if self.cursor > self.bookmark {
-                    self.flush_bookmark();
+            while self.buffer.len() < self.block_size {
+                match self.next_byte() {
+                    Some(byte) => {
+                        self.buffer.push(byte);
+                    },
+                    None => {
+                        let block = self.buffer.clone();
+                        self.save_block(block);
+                        return;
+                    },
                 }
-                break;
             }
 
-            self.cursor += 1;
-            assert!(self.cursor - self.bookmark <= self.block_size);
-            assert!(self.cursor <= self.data.len());
+            let block = self.buffer.clone();
+            self.save_block(block);
+            self.buffer.truncate(0);
         }
-        assert!(self.cursor == self.bookmark);
-        assert!(self.cursor == self.data.len());
     }
 
     pub fn store(block_size: usize, data: &'a [u8], blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
@@ -93,10 +99,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             blocks: blocks,
             data: data,
             cursor: 0,
-            bookmark: 0,
+            buffer: Vec::new(),
             block_keys: Vec::new(),
         };
-        deduplicator._store();
+        deduplicator.consume();
         return deduplicator.block_keys;
     }
 }
