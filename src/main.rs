@@ -43,16 +43,6 @@ struct Deduplicator<'a> {
 }
 
 impl<'a> Deduplicator<'a> {
-    fn new(block_size: usize, data: &'a [u8]) -> Deduplicator {
-        Deduplicator{
-            block_size: block_size,
-            data: data,
-            start: 0,
-            size: 1,
-            block_keys: Vec::new(),
-        }
-    }
-
     fn save_block(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) {
         let block = self.data[self.start .. self.start + self.size].to_vec();
         let block_key = block.clone();
@@ -85,7 +75,13 @@ impl<'a> Deduplicator<'a> {
     }
 
     pub fn store(block_size: usize, data: &'a [u8], blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
-        let mut deduplicator = Deduplicator::new(block_size, data);
+        let mut deduplicator = Deduplicator{
+            block_size: block_size,
+            data: data,
+            start: 0,
+            size: 1,
+            block_keys: Vec::new(),
+        };
         return deduplicator._store(blocks);
     }
 }
