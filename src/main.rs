@@ -52,7 +52,7 @@ impl<'a> Deduplicator<'a> {
         self.size = 0;
     }
 
-    pub fn _store(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
+    pub fn _store(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) {
         loop {
             if self.size == self.block_size {
                 self.save_block(blocks);
@@ -70,8 +70,6 @@ impl<'a> Deduplicator<'a> {
         }
         assert!(self.size == 0);
         assert!(self.start == self.data.len());
-
-        return self.block_keys.clone(); // TODO no clone
     }
 
     pub fn store(block_size: usize, data: &'a [u8], blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
@@ -82,7 +80,8 @@ impl<'a> Deduplicator<'a> {
             size: 1,
             block_keys: Vec::new(),
         };
-        return deduplicator._store(blocks);
+        deduplicator._store(blocks);
+        return deduplicator.block_keys;
     }
 }
 
