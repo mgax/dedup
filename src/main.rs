@@ -60,6 +60,19 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         self.block_keys.push(block_key);
     }
 
+    fn flushn(&mut self, buffer: &mut Vec<u8>, size: usize) {
+        if buffer.len() > size {
+            let mut remainder = buffer.split_off(size);
+            self.save(buffer.clone());
+            buffer.clear();
+            buffer.append(&mut remainder);
+        }
+        else {
+            self.save(buffer.clone());
+            buffer.clear();
+        }
+    }
+
     fn next_byte(&mut self) -> Option<u8> {
         if self.cursor < self.data.len() {
             let rv = self.data[self.cursor];
@@ -72,9 +85,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn consume(&mut self) {
+        let block_size = self.block_size;
         let mut buffer: Vec<u8> = Vec::new();
         loop {
-            while buffer.len() < self.block_size {
+            while buffer.len() < block_size {
                 match self.next_byte() {
                     Some(byte) => {
                         buffer.push(byte);
@@ -87,26 +101,22 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 }
             }
 
-            while buffer.len() < 2 * self.block_size {
+            while buffer.len() < 2 * block_size {
                 match self.next_byte() {
                     Some(byte) => {
                         buffer.push(byte);
                     },
                     None => {
-                        let block1 = buffer[0 .. self.block_size].to_vec();
-                        self.save(block1);
-                        if buffer.len() > self.block_size {
-                            let block2 = buffer[self.block_size ..].to_vec();
-                            self.save(block2);
+                        self.flushn(&mut buffer, block_size);
+                        if buffer.len() > 0 {
+                            self.flushn(&mut buffer, block_size);
                         }
                         return;
                     },
                 }
             }
 
-            let block = buffer.clone();
-            self.save(block);
-            buffer.truncate(0);
+            self.flushn(&mut buffer, block_size);
         }
     }
 
