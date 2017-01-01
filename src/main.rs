@@ -38,6 +38,9 @@ impl Store {
 struct Deduplicator<'a> {
     block_size: usize,
     data: &'a [u8],
+    start: usize,
+    size: usize,
+    block_keys: Vec<Vec<u8>>,
 }
 
 impl<'a> Deduplicator<'a> {
@@ -45,43 +48,41 @@ impl<'a> Deduplicator<'a> {
         Deduplicator{
             block_size: block_size,
             data: data,
+            start: 0,
+            size: 1,
+            block_keys: Vec::new(),
         }
     }
 
-    pub fn store(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
-        let mut block_keys: Vec<Vec<u8>> = Vec::new();
-        let mut start = 0;
-        let mut size = 1;
+    fn save_block(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) {
+        let block = self.data[self.start .. self.start + self.size].to_vec();
+        let block_key = block.clone();
+        blocks.insert(block_key.clone(), block);
+        self.block_keys.push(block_key);
+        self.start += self.size;
+        self.size = 0;
+    }
 
+    pub fn store(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
         loop {
-            if size == self.block_size {
-                let block = self.data[start .. start + size].to_vec();
-                let block_key = block.clone();
-                blocks.insert(block_key.clone(), block);
-                block_keys.push(block_key);
-                start += size;
-                size = 0;
+            if self.size == self.block_size {
+                self.save_block(blocks);
             }
-            if start + size == self.data.len() {
-                if size > 0 {
-                    let block = self.data[start .. start + size].to_vec();
-                    let block_key = block.clone();
-                    blocks.insert(block_key.clone(), block);
-                    block_keys.push(block_key);
-                    start += size;
-                    size = 0;
+            if self.start + self.size == self.data.len() {
+                if self.size > 0 {
+                    self.save_block(blocks);
                 }
                 break;
             }
 
-            size += 1;
-            assert!(size <= self.block_size);
-            assert!(start + size <= self.data.len());
+            self.size += 1;
+            assert!(self.size <= self.block_size);
+            assert!(self.start + self.size <= self.data.len());
         }
-        assert!(size == 0);
-        assert!(start == self.data.len());
+        assert!(self.size == 0);
+        assert!(self.start == self.data.len());
 
-        return block_keys;
+        return self.block_keys.clone(); // TODO no clone
     }
 }
 
