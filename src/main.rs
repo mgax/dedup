@@ -34,32 +34,33 @@ impl Store {
     }
 }
 
-struct Deduplicator<'a> {
+struct Deduplicator<'a, 'b> {
     block_size: usize,
+    blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
     data: &'a [u8],
     start: usize,
     size: usize,
     block_keys: Vec<Vec<u8>>,
 }
 
-impl<'a> Deduplicator<'a> {
-    fn save_block(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) {
+impl<'a, 'b> Deduplicator<'a, 'b> {
+    fn save_block(&mut self) {
         let block = self.data[self.start .. self.start + self.size].to_vec();
         let block_key = block.clone();
-        blocks.insert(block_key.clone(), block);
+        self.blocks.insert(block_key.clone(), block);
         self.block_keys.push(block_key);
         self.start += self.size;
         self.size = 0;
     }
 
-    pub fn _store(&mut self, blocks: &mut HashMap<Vec<u8>, Vec<u8>>) {
+    pub fn _store(&mut self) {
         loop {
             if self.size == self.block_size {
-                self.save_block(blocks);
+                self.save_block();
             }
             if self.start + self.size == self.data.len() {
                 if self.size > 0 {
-                    self.save_block(blocks);
+                    self.save_block();
                 }
                 break;
             }
@@ -72,15 +73,16 @@ impl<'a> Deduplicator<'a> {
         assert!(self.start == self.data.len());
     }
 
-    pub fn store(block_size: usize, data: &'a [u8], blocks: &mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
+    pub fn store(block_size: usize, data: &'a [u8], blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>) -> Vec<Vec<u8>> {
         let mut deduplicator = Deduplicator{
             block_size: block_size,
+            blocks: blocks,
             data: data,
             start: 0,
             size: 1,
             block_keys: Vec::new(),
         };
-        deduplicator._store(blocks);
+        deduplicator._store();
         return deduplicator.block_keys;
     }
 }
