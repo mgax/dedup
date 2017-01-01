@@ -1,4 +1,7 @@
+extern crate crypto;
 use std::collections::HashMap;
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 
 fn main() {
     println!("Hello, world!");
@@ -45,7 +48,11 @@ struct Deduplicator<'a, 'b> {
 
 impl<'a, 'b> Deduplicator<'a, 'b> {
     fn hash(&self, block: &[u8]) -> Vec<u8> {
-        return block.to_vec();
+        let mut hasher = Sha256::new();
+        hasher.input(block);
+        let mut hash: Vec<u8> = vec![0; 32];
+        hasher.result(&mut hash);
+        return hash;
     }
 
     fn save_block(&mut self) {
