@@ -62,6 +62,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn save(&mut self, block: Vec<u8>) {
+        if block.len() == 0 { return }
         let block_size = block.len();
         let block_key = self.hash(block.as_slice());
         if ! self.blocks.contains_key(&block_key) {
