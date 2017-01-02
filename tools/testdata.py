@@ -10,6 +10,6 @@ out = subprocess.check_output('git log --oneline', cwd=repo, shell=True)
 hashes = [line.decode('latin1').split()[0] for line in out.splitlines()]
 hashes.reverse()
 
-line = '{:03d}-{}: git --git-dir={}/.git archive {}^{{tree}}'
+line = '{:03d}-{}: git --git-dir={}/.git archive {} | tar xvO 2>&1'
 for n, h in enumerate(hashes):
     print(line.format(n+1, h, repo, h))
