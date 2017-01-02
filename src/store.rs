@@ -21,14 +21,15 @@ impl Store {
         }
     }
 
-    pub fn save(&mut self, key: &str, data: &[u8]) {
-        let block_keys = Deduplicator::store(
+    pub fn save(&mut self, key: &str, data: &[u8]) -> Stats {
+        let (block_keys, stats) = Deduplicator::store(
             self.block_size,
             data,
             &mut self.blocks,
             &mut self.matches,
         );
         self.files.insert(key.to_string(), block_keys);
+        return stats;
     }
 
     pub fn load(&self, key: &str) -> Vec<u8> {
@@ -48,6 +49,7 @@ struct Deduplicator<'a, 'b> {
     data: &'a [u8],
     cursor: usize,
     block_keys: Vec<Vec<u8>>,
+    stats: Stats,
 }
 
 impl<'a, 'b> Deduplicator<'a, 'b> {
@@ -60,6 +62,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn save(&mut self, block: Vec<u8>) {
+        let block_size = block.len();
         let block_key = self.hash(block.as_slice());
         if ! self.blocks.contains_key(&block_key) {
             if block.len() == self.block_size {
@@ -67,6 +70,12 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 self.matches.insert(rollhash);
             }
             self.blocks.insert(block_key.clone(), block);
+            self.stats.new_blocks += 1;
+            self.stats.new_bytes += block_size;
+        }
+        else {
+            self.stats.old_blocks += 1;
+            self.stats.old_bytes += block_size;
         }
 
         self.block_keys.push(block_key);
@@ -151,7 +160,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         data: &'a [u8],
         blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
         matches: &'b mut HashSet<u32>,
-    ) -> Vec<Vec<u8>> {
+    ) -> (Vec<Vec<u8>>, Stats) {
         let mut deduplicator = Deduplicator{
             block_size: block_size,
             blocks: blocks,
@@ -159,10 +168,23 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             data: data,
             cursor: 0,
             block_keys: Vec::new(),
+            stats: Stats{
+                old_blocks: 0,
+                old_bytes: 0,
+                new_blocks: 0,
+                new_bytes: 0,
+            },
         };
         deduplicator.consume();
-        return deduplicator.block_keys;
+        return (deduplicator.block_keys, deduplicator.stats);
     }
+}
+
+pub struct Stats {
+    pub old_blocks: u32,
+    pub old_bytes: usize,
+    pub new_blocks: u32,
+    pub new_bytes: usize,
 }
 
 #[cfg(test)]
