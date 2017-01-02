@@ -1,16 +1,10 @@
-extern crate crypto;
-extern crate adler32;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
 
-fn main() {
-    println!("Hello, world!");
-}
-
-struct Store {
+pub struct Store {
     block_size: usize,
     blocks: HashMap<Vec<u8>, Vec<u8>>,
     matches: HashSet<u32>,
