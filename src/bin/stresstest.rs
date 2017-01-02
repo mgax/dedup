@@ -1,14 +1,25 @@
 extern crate regex;
+extern crate crypto;
 extern crate dedup;
 
 use std::io;
 use std::io::prelude::*;
 use std::process::Command;
+use std::collections::HashMap;
 use regex::Regex;
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
 use dedup::store::Store;
+
+fn sha256(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.input(data);
+    hasher.result_str()
+}
 
 fn main() {
     let mut store = Store::new(1024);
+    let mut hashes: HashMap<String, String> = HashMap::new();
     let re = Regex::new(r"^([^:]*):\s*(.*)$").unwrap();
     let stdin = io::stdin();
     println!("name                       new (bytes / chunks)  dup (bytes / chunks)");
@@ -24,5 +35,10 @@ fn main() {
             stats.dup_bytes, stats.dup_blocks,
             stats.roll_false,
         );
+        hashes.insert(name.to_string(), sha256(&output.stdout));
+    }
+    for (name, hash) in &hashes {
+        let stored_hash = sha256(&store.load(name));
+        assert_eq!(*hash, *stored_hash);
     }
 }
