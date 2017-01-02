@@ -36,7 +36,7 @@ impl Store {
         let mut out: Vec<u8> = Vec::new();
         for block_key in self.files.get(key).unwrap().iter() {
             let block = self.blocks.get(block_key).unwrap();
-            out.extend(block.as_slice());
+            out.extend(block);
         }
         return out;
     }
@@ -64,10 +64,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     fn save(&mut self, block: Vec<u8>) {
         if block.len() == 0 { return }
         let block_size = block.len();
-        let block_key = self.hash(block.as_slice());
+        let block_key = self.hash(&block);
         if ! self.blocks.contains_key(&block_key) {
             if block.len() == self.block_size {
-                let rollhash = RollingAdler32::from_buffer(block.as_slice()).hash();
+                let rollhash = RollingAdler32::from_buffer(&block).hash();
                 self.matches.insert(rollhash);
             }
             self.blocks.insert(block_key.clone(), block);
@@ -123,7 +123,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 }
             }
 
-            let mut roll = RollingAdler32::from_buffer(buffer.as_slice());
+            let mut roll = RollingAdler32::from_buffer(&buffer);
 
             while buffer.len() < 2 * block_size {
                 if self.matches.contains(&roll.hash()) {

@@ -17,7 +17,7 @@ fn main() {
         let cap = re.captures(&uline).unwrap();
         let (name, cmd) = (&cap[1], &cap[2]);
         let output = Command::new("sh").arg("-c").arg(cmd).output().unwrap();
-        let stats = store.save(name, output.stdout.as_slice());
+        let stats = store.save(name, &output.stdout);
         println!("{:24} {:12} / {:<6} {:12} / {:<6} fp={}",
             name,
             stats.new_bytes, stats.new_blocks,
