@@ -74,8 +74,8 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             self.stats.new_bytes += block_size;
         }
         else {
-            self.stats.old_blocks += 1;
-            self.stats.old_bytes += block_size;
+            self.stats.dup_blocks += 1;
+            self.stats.dup_bytes += block_size;
         }
 
         self.block_keys.push(block_key);
@@ -132,6 +132,9 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                         self.flushn(&mut buffer, offset);
                         break;
                     }
+                    else {
+                        self.stats.roll_false += 1;
+                    }
                 }
 
                 match self.next_byte() {
@@ -169,10 +172,11 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             cursor: 0,
             block_keys: Vec::new(),
             stats: Stats{
-                old_blocks: 0,
-                old_bytes: 0,
+                dup_blocks: 0,
+                dup_bytes: 0,
                 new_blocks: 0,
                 new_bytes: 0,
+                roll_false: 0,
             },
         };
         deduplicator.consume();
@@ -181,10 +185,11 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
 }
 
 pub struct Stats {
-    pub old_blocks: u32,
-    pub old_bytes: usize,
+    pub dup_blocks: u32,
+    pub dup_bytes: usize,
     pub new_blocks: u32,
     pub new_bytes: usize,
+    pub roll_false: u32,
 }
 
 #[cfg(test)]

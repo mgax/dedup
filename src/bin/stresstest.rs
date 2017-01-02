@@ -18,7 +18,8 @@ fn main() {
         println!("{}", name);
         let output = Command::new("sh").arg("-c").arg(cmd).output().unwrap();
         let stats = store.save(name, output.stdout.as_slice());
-        println!("old: {} ({})", stats.old_blocks, stats.old_bytes);
         println!("new: {} ({})", stats.new_blocks, stats.new_bytes);
+        println!("dup: {} ({})", stats.dup_blocks, stats.dup_bytes);
+        println!("rolling hash false positives: {}", stats.roll_false);
     }
 }
