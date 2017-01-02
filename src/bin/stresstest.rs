@@ -17,6 +17,8 @@ fn main() {
         let (name, cmd) = (&cap[1], &cap[2]);
         println!("{}", name);
         let output = Command::new("sh").arg("-c").arg(cmd).output().unwrap();
-        store.save(name, output.stdout.as_slice());
+        let stats = store.save(name, output.stdout.as_slice());
+        println!("old: {} ({})", stats.old_blocks, stats.old_bytes);
+        println!("new: {} ({})", stats.new_blocks, stats.new_bytes);
     }
 }
