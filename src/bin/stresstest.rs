@@ -49,7 +49,7 @@ fn main() {
         let hash = hasher.result_str();
 
         assert!(child.wait().unwrap().success());
-        let stats = store.save(name, &mut tmpfile);
+        let stats = store.save(name, &mut tmpfile).unwrap();
         println!("{:24} {:12} / {:<6} {:12} / {:<6} fp={}",
             name,
             stats.new_bytes, stats.new_blocks,

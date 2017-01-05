@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io;
 use std::io::{Read, Write};
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
@@ -12,6 +13,11 @@ pub struct Store {
     files: HashMap<String, Vec<Vec<u8>>>,
 }
 
+#[derive(Debug)]
+pub enum SaveError {
+    Io(io::Error),
+}
+
 impl Store {
     pub fn new(block_size: usize) -> Store {
         Store{
@@ -22,15 +28,15 @@ impl Store {
         }
     }
 
-    pub fn save(&mut self, key: &str, reader: &mut Read) -> Stats {
-        let (block_keys, stats) = Deduplicator::store(
+    pub fn save(&mut self, key: &str, reader: &mut Read) -> Result<Stats, SaveError> {
+        let (block_keys, stats) = try!(Deduplicator::store(
             self.block_size,
             reader,
             &mut self.blocks,
             &mut self.matches,
-        );
+        ));
         self.files.insert(key.to_string(), block_keys);
-        return stats;
+        return Ok(stats);
     }
 
     pub fn load(&self, key: &str, writer: &mut Write) {
@@ -93,30 +99,30 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         }
     }
 
-    fn next_byte(&mut self) -> Option<u8> {
+    fn next_byte(&mut self) -> Result<Option<u8>, SaveError> {
         let mut buffer = [0; 1];
-        let n = self.reader.read(&mut buffer).unwrap();
+        let n = try!(self.reader.read(&mut buffer).map_err(SaveError::Io));
         if n > 0 {
-            Some(buffer[0])
+            Ok(Some(buffer[0]))
         }
         else {
-            None
+            Ok(None)
         }
     }
 
-    fn consume(&mut self) {
+    fn consume(&mut self) -> Result<(), SaveError> {
         let block_size = self.block_size;
         let mut buffer: Vec<u8> = Vec::new();
         loop {
             while buffer.len() < block_size {
-                match self.next_byte() {
+                match try!(self.next_byte()) {
                     Some(byte) => {
                         buffer.push(byte);
                     },
                     None => {
                         let block = buffer.clone();
                         self.save(block);
-                        return;
+                        return Ok(());
                     },
                 }
             }
@@ -136,7 +142,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                     }
                 }
 
-                match self.next_byte() {
+                match try!(self.next_byte()) {
                     Some(byte) => {
                         roll.remove(self.block_size,
                             buffer[buffer.len() - self.block_size]);
@@ -148,7 +154,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                         if buffer.len() > 0 {
                             self.flushn(&mut buffer, block_size);
                         }
-                        return;
+                        return Ok(());
                     },
                 }
             }
@@ -162,7 +168,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         reader: &'a mut Read,
         blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
         matches: &'b mut HashSet<u32>,
-    ) -> (Vec<Vec<u8>>, Stats) {
+    ) -> Result<(Vec<Vec<u8>>, Stats), SaveError> {
         let mut deduplicator = Deduplicator{
             block_size: block_size,
             blocks: blocks,
@@ -177,8 +183,8 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
                 roll_false: 0,
             },
         };
-        deduplicator.consume();
-        return (deduplicator.block_keys, deduplicator.stats);
+        try!(deduplicator.consume());
+        return Ok((deduplicator.block_keys, deduplicator.stats));
     }
 }
 
@@ -204,7 +210,7 @@ mod tests {
     fn single_small_file() {
         let mut store = super::Store::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        store.save("fox", &mut Cursor::new(fox));
+        store.save("fox", &mut Cursor::new(fox)).unwrap();
         assert_eq!(load(&store, "fox"), fox);
     }
 
@@ -213,8 +219,8 @@ mod tests {
         let mut store = super::Store::new(4);
         let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
         let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
-        store.save("fox_one", &mut Cursor::new(fox_one));
-        store.save("fox_two", &mut Cursor::new(fox_two));
+        store.save("fox_one", &mut Cursor::new(fox_one)).unwrap();
+        store.save("fox_two", &mut Cursor::new(fox_two)).unwrap();
         assert_eq!(load(&store, "fox_one"), fox_one);
         assert_eq!(load(&store, "fox_two"), fox_two);
     }
