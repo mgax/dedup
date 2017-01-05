@@ -7,3 +7,4 @@ authors = ["Alex Morega <alex@grep.ro>"]
 rust-crypto = "^0.2"
 adler32 = "0.3.0"
 regex = "0.2.0"
+tempfile = "2.1.4"

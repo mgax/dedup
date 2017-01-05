@@ -1,5 +1,6 @@
 extern crate regex;
 extern crate crypto;
+extern crate tempfile;
 extern crate dedup;
 
 use std::io;
@@ -32,8 +33,23 @@ fn main() {
             .stdout(Stdio::piped())
             .spawn()
             .unwrap();
+
+        let mut stdout = child.stdout.take().unwrap();
+        let mut tmpfile = tempfile::tempfile().unwrap();
+        let mut buffer = [0; 4096];
+        let mut hasher = Sha256::new();
+        loop {
+            let n = stdout.read(&mut buffer).unwrap();
+            if n == 0 { break }
+            tmpfile.write(&buffer).unwrap();
+            hasher.input(&buffer);
+        }
+
         let mut data = vec!();
-        child.stdout.take().unwrap().read_to_end(&mut data).unwrap();
+        tmpfile.seek(io::SeekFrom::Start(0)).unwrap();
+        tmpfile.read_to_end(&mut data).unwrap();
+        let hash = hasher.result_str();
+
         assert!(child.wait().unwrap().success());
         let stats = store.save(name, &data);
         println!("{:24} {:12} / {:<6} {:12} / {:<6} fp={}",
@@ -42,7 +58,7 @@ fn main() {
             stats.dup_bytes, stats.dup_blocks,
             stats.roll_false,
         );
-        hashes.insert(name.to_string(), sha256(&data));
+        hashes.insert(name.to_string(), hash);
     }
     for (name, hash) in &hashes {
         let stored_hash = sha256(&store.load(name));
