@@ -47,8 +47,7 @@ struct Deduplicator<'a, 'b> {
     block_size: usize,
     blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
     matches: &'b mut HashSet<u32>,
-    data: &'a [u8],
-    cursor: usize,
+    reader: &'a mut Read,
     block_keys: Vec<Vec<u8>>,
     stats: Stats,
 }
@@ -97,10 +96,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn next_byte(&mut self) -> Option<u8> {
-        if self.cursor < self.data.len() {
-            let rv = self.data[self.cursor];
-            self.cursor += 1;
-            Some(rv)
+        let mut buffer = [0; 1];
+        let n = self.reader.read(&mut buffer).unwrap();
+        if n > 0 {
+            Some(buffer[0])
         }
         else {
             None
@@ -166,14 +165,11 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
         matches: &'b mut HashSet<u32>,
     ) -> (Vec<Vec<u8>>, Stats) {
-        let mut data = vec!();
-        reader.read_to_end(&mut data).unwrap();
         let mut deduplicator = Deduplicator{
             block_size: block_size,
             blocks: blocks,
             matches: matches,
-            data: &data,
-            cursor: 0,
+            reader: reader,
             block_keys: Vec::new(),
             stats: Stats{
                 dup_blocks: 0,
