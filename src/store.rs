@@ -18,6 +18,19 @@ pub enum SaveError {
     Io(io::Error),
 }
 
+#[derive(Debug)]
+pub struct NotFoundError {}
+
+#[derive(Debug)]
+pub struct CorruptDatabaseError {}
+
+#[derive(Debug)]
+pub enum LoadError {
+    Io(io::Error),
+    NotFound(NotFoundError),
+    CorruptDatabase(CorruptDatabaseError),
+}
+
 impl Store {
     pub fn new(block_size: usize) -> Store {
         Store{
@@ -39,11 +52,14 @@ impl Store {
         return Ok(stats);
     }
 
-    pub fn load(&self, key: &str, writer: &mut Write) {
-        for block_key in self.files.get(key).unwrap().iter() {
-            let block = self.blocks.get(block_key).unwrap();
-            writer.write(&block).unwrap();
+    pub fn load(&self, key: &str, writer: &mut Write) -> Result<(), LoadError> {
+        let not_found = LoadError::NotFound(NotFoundError{});
+        for block_key in try!(self.files.get(key).ok_or(not_found)).iter() {
+            let corrupt_db = LoadError::CorruptDatabase(CorruptDatabaseError{});
+            let block = try!(self.blocks.get(block_key).ok_or(corrupt_db));
+            try!(writer.write(&block).map_err(LoadError::Io));
         }
+        Ok(())
     }
 }
 
@@ -202,7 +218,7 @@ mod tests {
 
     fn load(store: &super::Store, name: &str) -> Vec<u8> {
         let mut cursor = Cursor::new(vec!());
-        store.load(name, &mut cursor);
+        store.load(name, &mut cursor).unwrap();
         return cursor.into_inner();
     }
 
@@ -223,5 +239,28 @@ mod tests {
         store.save("fox_two", &mut Cursor::new(fox_two)).unwrap();
         assert_eq!(load(&store, "fox_one"), fox_one);
         assert_eq!(load(&store, "fox_two"), fox_two);
+    }
+
+    #[test]
+    fn not_found_error() {
+        let store = super::Store::new(4);
+        let rv = store.load("no such file", &mut Cursor::new(vec!()));
+        match rv {
+            Err(super::LoadError::NotFound(super::NotFoundError{})) => (),
+            _ => panic!("should fail with NotFoundError"),
+        };
+    }
+
+    #[test]
+    fn corrupt_db_error() {
+        let mut store = super::Store::new(4);
+        let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
+        store.save("fox", &mut Cursor::new(fox)).unwrap();
+        store.blocks.clear();
+        let rv = store.load("fox", &mut Cursor::new(vec!()));
+        match rv {
+            Err(super::LoadError::CorruptDatabase(super::CorruptDatabaseError{})) => (),
+            _ => panic!("should fail with CorruptDatabase error"),
+        };
     }
 }

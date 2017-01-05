@@ -60,7 +60,7 @@ fn main() {
     }
     for (name, hash) in &hashes {
         let mut cursor = io::Cursor::new(vec!());
-        store.load(name, &mut cursor);
+        store.load(name, &mut cursor).unwrap();
         let stored_hash = sha256(&cursor.into_inner());
         assert_eq!(*hash, *stored_hash);
     }
