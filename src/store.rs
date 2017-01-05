@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io::Read;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
@@ -21,10 +22,10 @@ impl Store {
         }
     }
 
-    pub fn save(&mut self, key: &str, data: &[u8]) -> Stats {
+    pub fn save(&mut self, key: &str, reader: &mut Read) -> Stats {
         let (block_keys, stats) = Deduplicator::store(
             self.block_size,
-            data,
+            reader,
             &mut self.blocks,
             &mut self.matches,
         );
@@ -161,15 +162,17 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
 
     pub fn store(
         block_size: usize,
-        data: &'a [u8],
+        reader: &'a mut Read,
         blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
         matches: &'b mut HashSet<u32>,
     ) -> (Vec<Vec<u8>>, Stats) {
+        let mut data = vec!();
+        reader.read_to_end(&mut data).unwrap();
         let mut deduplicator = Deduplicator{
             block_size: block_size,
             blocks: blocks,
             matches: matches,
-            data: data,
+            data: &data,
             cursor: 0,
             block_keys: Vec::new(),
             stats: Stats{
@@ -195,11 +198,13 @@ pub struct Stats {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     #[test]
     fn single_small_file() {
         let mut store = super::Store::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        store.save("fox", fox);
+        store.save("fox", &mut Cursor::new(fox));
         assert_eq!(store.load("fox"), fox);
     }
 
@@ -208,8 +213,8 @@ mod tests {
         let mut store = super::Store::new(4);
         let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
         let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
-        store.save("fox_one", fox_one);
-        store.save("fox_two", fox_two);
+        store.save("fox_one", &mut Cursor::new(fox_one));
+        store.save("fox_two", &mut Cursor::new(fox_two));
         assert_eq!(store.load("fox_one"), fox_one);
         assert_eq!(store.load("fox_two"), fox_two);
     }

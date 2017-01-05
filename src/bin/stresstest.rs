@@ -45,13 +45,11 @@ fn main() {
             hasher.input(&buffer);
         }
 
-        let mut data = vec!();
         tmpfile.seek(io::SeekFrom::Start(0)).unwrap();
-        tmpfile.read_to_end(&mut data).unwrap();
         let hash = hasher.result_str();
 
         assert!(child.wait().unwrap().success());
-        let stats = store.save(name, &data);
+        let stats = store.save(name, &mut tmpfile);
         println!("{:24} {:12} / {:<6} {:12} / {:<6} fp={}",
             name,
             stats.new_bytes, stats.new_blocks,
