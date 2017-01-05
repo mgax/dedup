@@ -45,8 +45,7 @@ impl Store {
         let (block_keys, stats) = try!(Deduplicator::store(
             self.block_size,
             reader,
-            &mut self.blocks,
-            &mut self.matches,
+            self,
         ));
         self.files.insert(key.to_string(), block_keys);
         return Ok(stats);
@@ -65,9 +64,8 @@ impl Store {
 
 struct Deduplicator<'a, 'b> {
     block_size: usize,
-    blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
-    matches: &'b mut HashSet<u32>,
     reader: &'a mut Read,
+    store: &'b mut Store,
     block_keys: Vec<Vec<u8>>,
     stats: Stats,
 }
@@ -85,12 +83,12 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         if block.len() == 0 { return }
         let block_size = block.len();
         let block_key = self.hash(&block);
-        if ! self.blocks.contains_key(&block_key) {
+        if ! self.store.blocks.contains_key(&block_key) {
             if block.len() == self.block_size {
                 let rollhash = RollingAdler32::from_buffer(&block).hash();
-                self.matches.insert(rollhash);
+                self.store.matches.insert(rollhash);
             }
-            self.blocks.insert(block_key.clone(), block);
+            self.store.blocks.insert(block_key.clone(), block);
             self.stats.new_blocks += 1;
             self.stats.new_bytes += block_size;
         }
@@ -146,10 +144,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             let mut roll = RollingAdler32::from_buffer(&buffer);
 
             while buffer.len() < 2 * block_size {
-                if self.matches.contains(&roll.hash()) {
+                if self.store.matches.contains(&roll.hash()) {
                     let offset = buffer.len() - block_size;
                     let hash = self.hash(&buffer[offset ..]);
-                    if self.blocks.contains_key(&hash) {
+                    if self.store.blocks.contains_key(&hash) {
                         self.flushn(&mut buffer, offset);
                         break;
                     }
@@ -182,13 +180,11 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     pub fn store(
         block_size: usize,
         reader: &'a mut Read,
-        blocks: &'b mut HashMap<Vec<u8>, Vec<u8>>,
-        matches: &'b mut HashSet<u32>,
+        store: &'b mut Store,
     ) -> Result<(Vec<Vec<u8>>, Stats), SaveError> {
         let mut deduplicator = Deduplicator{
             block_size: block_size,
-            blocks: blocks,
-            matches: matches,
+            store: store,
             reader: reader,
             block_keys: Vec::new(),
             stats: Stats{
