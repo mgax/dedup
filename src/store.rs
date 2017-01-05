@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::Read;
+use std::io::{Read, Write};
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
@@ -33,13 +33,11 @@ impl Store {
         return stats;
     }
 
-    pub fn load(&self, key: &str) -> Vec<u8> {
-        let mut out: Vec<u8> = Vec::new();
+    pub fn load(&self, key: &str, writer: &mut Write) {
         for block_key in self.files.get(key).unwrap().iter() {
             let block = self.blocks.get(block_key).unwrap();
-            out.extend(block);
+            writer.write(&block).unwrap();
         }
-        return out;
     }
 }
 
@@ -196,12 +194,18 @@ pub struct Stats {
 mod tests {
     use std::io::Cursor;
 
+    fn load(store: &super::Store, name: &str) -> Vec<u8> {
+        let mut cursor = Cursor::new(vec!());
+        store.load(name, &mut cursor);
+        return cursor.into_inner();
+    }
+
     #[test]
     fn single_small_file() {
         let mut store = super::Store::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
         store.save("fox", &mut Cursor::new(fox));
-        assert_eq!(store.load("fox"), fox);
+        assert_eq!(load(&store, "fox"), fox);
     }
 
     #[test]
@@ -211,7 +215,7 @@ mod tests {
         let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
         store.save("fox_one", &mut Cursor::new(fox_one));
         store.save("fox_two", &mut Cursor::new(fox_two));
-        assert_eq!(store.load("fox_one"), fox_one);
-        assert_eq!(store.load("fox_two"), fox_two);
+        assert_eq!(load(&store, "fox_one"), fox_one);
+        assert_eq!(load(&store, "fox_two"), fox_two);
     }
 }

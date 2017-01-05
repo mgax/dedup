@@ -59,7 +59,9 @@ fn main() {
         hashes.insert(name.to_string(), hash);
     }
     for (name, hash) in &hashes {
-        let stored_hash = sha256(&store.load(name));
+        let mut cursor = io::Cursor::new(vec!());
+        store.load(name, &mut cursor);
+        let stored_hash = sha256(&cursor.into_inner());
         assert_eq!(*hash, *stored_hash);
     }
 }
