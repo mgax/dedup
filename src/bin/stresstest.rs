@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use regex::Regex;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use dedup::repo::Repo;
+use dedup::Repo;
 
 fn sha256(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
