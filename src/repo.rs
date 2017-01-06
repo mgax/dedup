@@ -1,21 +1,11 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::{Read, Write};
+use std::io::Read;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
 use errors::{SaveError, LoadError, NotFoundError, CorruptDatabaseError};
-
-pub trait Repo {
-    fn block_size(&self) -> usize;
-    fn write_hash(&mut self, hash: u32);
-    fn contains_hash(&self, hash: u32) -> bool;
-    fn write_block(&mut self, block_id: &Vec<u8>, block: Vec<u8>);
-    fn contains_block(&self, block_id: &Vec<u8>) -> bool;
-    fn read_block(&self, block_id: &Vec<u8>) -> Result<&Vec<u8>, LoadError>;
-    fn write_file(&mut self, name: &str, block_ids: Vec<Vec<u8>>);
-    fn read_file(&self, name: &str) -> Result<&Vec<Vec<u8>>, LoadError>;
-}
+use super::{Repo, Stats};
 
 pub struct MemoryRepo {
     block_size: usize,
@@ -69,19 +59,7 @@ impl MemoryRepo {
     }
 }
 
-pub fn save(repo: &mut Repo, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-    Deduplicator::store(repo, name, reader)
-}
-
-pub fn load(repo: &Repo, name: &str, writer: &mut Write) -> Result<(), LoadError> {
-    for block_key in try!(repo.read_file(name)).iter() {
-        let block = try!(repo.read_block(block_key));
-        try!(writer.write(&block).map_err(LoadError::Io));
-    }
-    Ok(())
-}
-
-struct Deduplicator<'a, 'b> {
+pub struct Deduplicator<'a, 'b> {
     reader: &'a mut Read,
     repo: &'b mut Repo,
     block_keys: Vec<Vec<u8>>,
@@ -215,22 +193,15 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 }
 
-pub struct Stats {
-    pub dup_blocks: u32,
-    pub dup_bytes: usize,
-    pub new_blocks: u32,
-    pub new_bytes: usize,
-    pub roll_false: u32,
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
     use errors::{LoadError, NotFoundError, CorruptDatabaseError};
+    use super::super::{save, load};
 
-    fn load(repo: &super::MemoryRepo, name: &str) -> Vec<u8> {
+    fn _load(repo: &super::MemoryRepo, name: &str) -> Vec<u8> {
         let mut cursor = Cursor::new(vec!());
-        super::load(repo, name, &mut cursor).unwrap();
+        load(repo, name, &mut cursor).unwrap();
         return cursor.into_inner();
     }
 
@@ -238,8 +209,8 @@ mod tests {
     fn single_small_file() {
         let mut repo = super::MemoryRepo::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        super::save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
-        assert_eq!(load(&repo, "fox"), fox);
+        save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
+        assert_eq!(_load(&repo, "fox"), fox);
     }
 
     #[test]
@@ -247,16 +218,16 @@ mod tests {
         let mut repo = super::MemoryRepo::new(4);
         let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
         let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
-        super::save(&mut repo, "fox_one", &mut Cursor::new(fox_one)).unwrap();
-        super::save(&mut repo, "fox_two", &mut Cursor::new(fox_two)).unwrap();
-        assert_eq!(load(&repo, "fox_one"), fox_one);
-        assert_eq!(load(&repo, "fox_two"), fox_two);
+        save(&mut repo, "fox_one", &mut Cursor::new(fox_one)).unwrap();
+        save(&mut repo, "fox_two", &mut Cursor::new(fox_two)).unwrap();
+        assert_eq!(_load(&repo, "fox_one"), fox_one);
+        assert_eq!(_load(&repo, "fox_two"), fox_two);
     }
 
     #[test]
     fn not_found_error() {
         let repo = super::MemoryRepo::new(4);
-        let rv = super::load(&repo, "no such file", &mut Cursor::new(vec!()));
+        let rv = load(&repo, "no such file", &mut Cursor::new(vec!()));
         match rv {
             Err(LoadError::NotFound(NotFoundError{})) => (),
             _ => panic!("should fail with NotFoundError"),
@@ -267,9 +238,9 @@ mod tests {
     fn corrupt_db_error() {
         let mut repo = super::MemoryRepo::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        super::save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
+        save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
         repo.blocks.clear();
-        let rv = super::load(&repo, "fox", &mut Cursor::new(vec!()));
+        let rv = load(&repo, "fox", &mut Cursor::new(vec!()));
         match rv {
             Err(LoadError::CorruptDatabase(CorruptDatabaseError{})) => (),
             _ => panic!("should fail with CorruptDatabase error"),
