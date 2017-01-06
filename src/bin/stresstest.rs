@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use regex::Regex;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
-use dedup::store::Store;
+use dedup::repo::Repo;
 
 fn sha256(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -19,7 +19,7 @@ fn sha256(data: &[u8]) -> String {
 }
 
 fn main() {
-    let mut store = Store::new(1024);
+    let mut repo = Repo::new(1024);
     let mut hashes: HashMap<String, String> = HashMap::new();
     let re = Regex::new(r"^([^:]*):\s*(.*)$").unwrap();
     let stdin = io::stdin();
@@ -49,7 +49,7 @@ fn main() {
         let hash = hasher.result_str();
 
         assert!(child.wait().unwrap().success());
-        let stats = store.save(name, &mut tmpfile).unwrap();
+        let stats = repo.save(name, &mut tmpfile).unwrap();
         println!("{:24} {:12} / {:<6} {:12} / {:<6} fp={}",
             name,
             stats.new_bytes, stats.new_blocks,
@@ -60,7 +60,7 @@ fn main() {
     }
     for (name, hash) in &hashes {
         let mut cursor = io::Cursor::new(vec!());
-        store.load(name, &mut cursor).unwrap();
+        repo.load(name, &mut cursor).unwrap();
         let stored_hash = sha256(&cursor.into_inner());
         assert_eq!(*hash, *stored_hash);
     }
