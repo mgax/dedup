@@ -87,7 +87,7 @@ impl Repo {
     }
 
     pub fn save(&mut self, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-        Deduplicator::store(reader, self, name)
+        Deduplicator::store(self, name, reader)
     }
 
     pub fn load(&self, name: &str, writer: &mut Write) -> Result<(), LoadError> {
@@ -213,11 +213,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         }
     }
 
-    pub fn store(
-        reader: &'a mut Read,
-        backend: &'b mut Backend,
-        name: &str,
-    ) -> Result<Stats, SaveError> {
+    pub fn store(backend: &'b mut Backend, name: &str, reader: &'a mut Read) -> Result<Stats, SaveError> {
         let mut deduplicator = Deduplicator{
             backend: backend,
             reader: reader,
