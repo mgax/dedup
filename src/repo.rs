@@ -86,12 +86,12 @@ impl Repo {
         }
     }
 
-    pub fn save(&mut self, key: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-        Deduplicator::store(reader, self, key)
+    pub fn save(&mut self, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
+        Deduplicator::store(reader, self, name)
     }
 
-    pub fn load(&self, key: &str, writer: &mut Write) -> Result<(), LoadError> {
-        for block_key in try!(self.read_file(key)).iter() {
+    pub fn load(&self, name: &str, writer: &mut Write) -> Result<(), LoadError> {
+        for block_key in try!(self.read_file(name)).iter() {
             let block = try!(self.read_block(block_key));
             try!(writer.write(&block).map_err(LoadError::Io));
         }
