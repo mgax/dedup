@@ -5,6 +5,9 @@ pub mod errors;
 mod memory_repo;
 mod deduplicator;
 
+#[cfg(test)]
+mod testsuite;
+
 pub use memory_repo::MemoryRepo;
 pub use errors::{SaveError, LoadError};
 

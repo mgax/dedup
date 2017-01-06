@@ -57,55 +57,27 @@ impl MemoryRepo {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-    use errors::{LoadError, NotFoundError, CorruptDatabaseError};
-    use super::super::{save, load};
-
-    fn _load(repo: &super::MemoryRepo, name: &str) -> Vec<u8> {
-        let mut cursor = Cursor::new(vec!());
-        load(repo, name, &mut cursor).unwrap();
-        return cursor.into_inner();
-    }
+    use super::super::testsuite as ts;
+    use super::MemoryRepo;
 
     #[test]
     fn single_small_file() {
-        let mut repo = super::MemoryRepo::new(4);
-        let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
-        assert_eq!(_load(&repo, "fox"), fox);
+        ts::single_small_file(&mut MemoryRepo::new(4));
     }
 
     #[test]
     fn two_small_files() {
-        let mut repo = super::MemoryRepo::new(4);
-        let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
-        let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
-        save(&mut repo, "fox_one", &mut Cursor::new(fox_one)).unwrap();
-        save(&mut repo, "fox_two", &mut Cursor::new(fox_two)).unwrap();
-        assert_eq!(_load(&repo, "fox_one"), fox_one);
-        assert_eq!(_load(&repo, "fox_two"), fox_two);
+        ts::two_small_files(&mut MemoryRepo::new(4));
     }
 
     #[test]
     fn not_found_error() {
-        let repo = super::MemoryRepo::new(4);
-        let rv = load(&repo, "no such file", &mut Cursor::new(vec!()));
-        match rv {
-            Err(LoadError::NotFound(NotFoundError{})) => (),
-            _ => panic!("should fail with NotFoundError"),
-        };
+        ts::not_found_error(&mut MemoryRepo::new(4));
     }
 
     #[test]
     fn corrupt_db_error() {
-        let mut repo = super::MemoryRepo::new(4);
-        let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
-        repo.blocks.clear();
-        let rv = load(&repo, "fox", &mut Cursor::new(vec!()));
-        match rv {
-            Err(LoadError::CorruptDatabase(CorruptDatabaseError{})) => (),
-            _ => panic!("should fail with CorruptDatabase error"),
-        };
+        fn break_repo(repo: &mut MemoryRepo) { repo.blocks.clear() }
+        ts::corrupt_db_error(&mut MemoryRepo::new(4), break_repo);
     }
 }
