@@ -12,6 +12,7 @@ trait Backend {
     fn contains_hash(&self, hash: u32) -> bool;
     fn write_block(&mut self, block_id: &Vec<u8>, block: Vec<u8>);
     fn contains_block(&self, block_id: &Vec<u8>) -> bool;
+    fn write_file(&mut self, name: &str, block_ids: Vec<Vec<u8>>);
 }
 
 pub struct Repo {
@@ -40,6 +41,10 @@ impl Backend for Repo {
 
     fn contains_block(&self, block_id: &Vec<u8>) -> bool {
         self.blocks.contains_key(block_id)
+    }
+
+    fn write_file(&mut self, name: &str, block_ids: Vec<Vec<u8>>) {
+        self.files.insert(name.to_string(), block_ids);
     }
 }
 
@@ -72,9 +77,7 @@ impl Repo {
     }
 
     pub fn save(&mut self, key: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-        let (block_keys, stats) = try!(Deduplicator::store(reader, self));
-        self.files.insert(key.to_string(), block_keys);
-        return Ok(stats);
+        Deduplicator::store(reader, self, key)
     }
 
     pub fn load(&self, key: &str, writer: &mut Write) -> Result<(), LoadError> {
@@ -205,7 +208,8 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     pub fn store(
         reader: &'a mut Read,
         backend: &'b mut Backend,
-    ) -> Result<(Vec<Vec<u8>>, Stats), SaveError> {
+        name: &str,
+    ) -> Result<Stats, SaveError> {
         let mut deduplicator = Deduplicator{
             backend: backend,
             reader: reader,
@@ -219,7 +223,9 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             },
         };
         try!(deduplicator.consume());
-        return Ok((deduplicator.block_keys, deduplicator.stats));
+        let Deduplicator{backend, stats, block_keys, ..} = deduplicator;
+        backend.write_file(name, block_keys);
+        return Ok(stats);
     }
 }
 
