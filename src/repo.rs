@@ -6,7 +6,7 @@ use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
 use errors::{SaveError, LoadError, NotFoundError, CorruptDatabaseError};
 
-pub trait Backend {
+pub trait Repo {
     fn block_size(&self) -> usize;
     fn write_hash(&mut self, hash: u32);
     fn contains_hash(&self, hash: u32) -> bool;
@@ -24,7 +24,7 @@ pub struct MemoryRepo {
     files: HashMap<String, Vec<Vec<u8>>>,
 }
 
-impl Backend for MemoryRepo {
+impl Repo for MemoryRepo {
     fn block_size(&self) -> usize {
         self.block_size
     }
@@ -69,11 +69,11 @@ impl MemoryRepo {
     }
 }
 
-pub fn save(repo: &mut Backend, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
+pub fn save(repo: &mut Repo, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
     Deduplicator::store(repo, name, reader)
 }
 
-pub fn load(repo: &Backend, name: &str, writer: &mut Write) -> Result<(), LoadError> {
+pub fn load(repo: &Repo, name: &str, writer: &mut Write) -> Result<(), LoadError> {
     for block_key in try!(repo.read_file(name)).iter() {
         let block = try!(repo.read_block(block_key));
         try!(writer.write(&block).map_err(LoadError::Io));
@@ -83,7 +83,7 @@ pub fn load(repo: &Backend, name: &str, writer: &mut Write) -> Result<(), LoadEr
 
 struct Deduplicator<'a, 'b> {
     reader: &'a mut Read,
-    backend: &'b mut Backend,
+    repo: &'b mut Repo,
     block_keys: Vec<Vec<u8>>,
     stats: Stats,
 }
@@ -101,12 +101,12 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         let block_len = block.len();
         if block_len == 0 { return }
         let block_key = self.hash(&block);
-        if ! self.backend.contains_block(&block_key) {
-            if block_len == self.backend.block_size() {
+        if ! self.repo.contains_block(&block_key) {
+            if block_len == self.repo.block_size() {
                 let rollhash = RollingAdler32::from_buffer(&block).hash();
-                self.backend.write_hash(rollhash);
+                self.repo.write_hash(rollhash);
             }
-            self.backend.write_block(&block_key, block);
+            self.repo.write_block(&block_key, block);
             self.stats.new_blocks += 1;
             self.stats.new_bytes += block_len;
         }
@@ -143,7 +143,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn consume(&mut self) -> Result<(), SaveError> {
-        let block_size = self.backend.block_size();
+        let block_size = self.repo.block_size();
         let mut buffer: Vec<u8> = Vec::new();
         loop {
             while buffer.len() < block_size {
@@ -162,10 +162,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             let mut roll = RollingAdler32::from_buffer(&buffer);
 
             while buffer.len() < 2 * block_size {
-                if self.backend.contains_hash(roll.hash()) {
+                if self.repo.contains_hash(roll.hash()) {
                     let offset = buffer.len() - block_size;
                     let hash = self.hash(&buffer[offset ..]);
-                    if self.backend.contains_block(&hash) {
+                    if self.repo.contains_block(&hash) {
                         self.flushn(&mut buffer, offset);
                         break;
                     }
@@ -195,9 +195,9 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         }
     }
 
-    pub fn store(backend: &'b mut Backend, name: &str, reader: &'a mut Read) -> Result<Stats, SaveError> {
+    pub fn store(repo: &'b mut Repo, name: &str, reader: &'a mut Read) -> Result<Stats, SaveError> {
         let mut deduplicator = Deduplicator{
-            backend: backend,
+            repo: repo,
             reader: reader,
             block_keys: Vec::new(),
             stats: Stats{
@@ -209,8 +209,8 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             },
         };
         try!(deduplicator.consume());
-        let Deduplicator{backend, stats, block_keys, ..} = deduplicator;
-        backend.write_file(name, block_keys);
+        let Deduplicator{repo, stats, block_keys, ..} = deduplicator;
+        repo.write_file(name, block_keys);
         return Ok(stats);
     }
 }
