@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io;
 use std::io::{Read, Write};
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
+use errors::{SaveError, LoadError, NotFoundError, CorruptDatabaseError};
 
 trait Backend {
     fn block_size(&self) -> usize;
@@ -56,24 +56,6 @@ impl Backend for Repo {
     fn read_file(&self, name: &str) -> Result<&Vec<Vec<u8>>, LoadError> {
         self.files.get(name).ok_or(LoadError::NotFound(NotFoundError{}))
     }
-}
-
-#[derive(Debug)]
-pub enum SaveError {
-    Io(io::Error),
-}
-
-#[derive(Debug)]
-pub struct NotFoundError {}
-
-#[derive(Debug)]
-pub struct CorruptDatabaseError {}
-
-#[derive(Debug)]
-pub enum LoadError {
-    Io(io::Error),
-    NotFound(NotFoundError),
-    CorruptDatabase(CorruptDatabaseError),
 }
 
 impl Repo {
@@ -244,6 +226,7 @@ pub struct Stats {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
+    use errors::{LoadError, NotFoundError, CorruptDatabaseError};
 
     fn load(repo: &super::Repo, name: &str) -> Vec<u8> {
         let mut cursor = Cursor::new(vec!());
@@ -275,7 +258,7 @@ mod tests {
         let repo = super::Repo::new(4);
         let rv = repo.load("no such file", &mut Cursor::new(vec!()));
         match rv {
-            Err(super::LoadError::NotFound(super::NotFoundError{})) => (),
+            Err(LoadError::NotFound(NotFoundError{})) => (),
             _ => panic!("should fail with NotFoundError"),
         };
     }
@@ -288,7 +271,7 @@ mod tests {
         repo.blocks.clear();
         let rv = repo.load("fox", &mut Cursor::new(vec!()));
         match rv {
-            Err(super::LoadError::CorruptDatabase(super::CorruptDatabaseError{})) => (),
+            Err(LoadError::CorruptDatabase(CorruptDatabaseError{})) => (),
             _ => panic!("should fail with CorruptDatabase error"),
         };
     }
