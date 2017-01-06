@@ -12,7 +12,9 @@ trait Backend {
     fn contains_hash(&self, hash: u32) -> bool;
     fn write_block(&mut self, block_id: &Vec<u8>, block: Vec<u8>);
     fn contains_block(&self, block_id: &Vec<u8>) -> bool;
+    fn read_block(&self, block_id: &Vec<u8>) -> Result<&Vec<u8>, LoadError>;
     fn write_file(&mut self, name: &str, block_ids: Vec<Vec<u8>>);
+    fn read_file(&self, name: &str) -> Result<&Vec<Vec<u8>>, LoadError>;
 }
 
 pub struct Repo {
@@ -43,8 +45,16 @@ impl Backend for Repo {
         self.blocks.contains_key(block_id)
     }
 
+    fn read_block(&self, block_id: &Vec<u8>) -> Result<&Vec<u8>, LoadError> {
+        self.blocks.get(block_id).ok_or(LoadError::CorruptDatabase(CorruptDatabaseError{}))
+    }
+
     fn write_file(&mut self, name: &str, block_ids: Vec<Vec<u8>>) {
         self.files.insert(name.to_string(), block_ids);
+    }
+
+    fn read_file(&self, name: &str) -> Result<&Vec<Vec<u8>>, LoadError> {
+        self.files.get(name).ok_or(LoadError::NotFound(NotFoundError{}))
     }
 }
 
@@ -81,10 +91,8 @@ impl Repo {
     }
 
     pub fn load(&self, key: &str, writer: &mut Write) -> Result<(), LoadError> {
-        let not_found = LoadError::NotFound(NotFoundError{});
-        for block_key in try!(self.files.get(key).ok_or(not_found)).iter() {
-            let corrupt_db = LoadError::CorruptDatabase(CorruptDatabaseError{});
-            let block = try!(self.blocks.get(block_key).ok_or(corrupt_db));
+        for block_key in try!(self.read_file(key)).iter() {
+            let block = try!(self.read_block(block_key));
             try!(writer.write(&block).map_err(LoadError::Io));
         }
         Ok(())
