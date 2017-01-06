@@ -6,7 +6,7 @@ use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
 use errors::{SaveError, LoadError, NotFoundError, CorruptDatabaseError};
 
-trait Backend {
+pub trait Backend {
     fn block_size(&self) -> usize;
     fn write_hash(&mut self, hash: u32);
     fn contains_hash(&self, hash: u32) -> bool;
@@ -67,18 +67,18 @@ impl Repo {
             files: HashMap::new(),
         }
     }
+}
 
-    pub fn save(&mut self, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-        Deduplicator::store(self, name, reader)
-    }
+pub fn save(repo: &mut Backend, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
+    Deduplicator::store(repo, name, reader)
+}
 
-    pub fn load(&self, name: &str, writer: &mut Write) -> Result<(), LoadError> {
-        for block_key in try!(self.read_file(name)).iter() {
-            let block = try!(self.read_block(block_key));
-            try!(writer.write(&block).map_err(LoadError::Io));
-        }
-        Ok(())
+pub fn load(repo: &Backend, name: &str, writer: &mut Write) -> Result<(), LoadError> {
+    for block_key in try!(repo.read_file(name)).iter() {
+        let block = try!(repo.read_block(block_key));
+        try!(writer.write(&block).map_err(LoadError::Io));
     }
+    Ok(())
 }
 
 struct Deduplicator<'a, 'b> {
@@ -230,7 +230,7 @@ mod tests {
 
     fn load(repo: &super::Repo, name: &str) -> Vec<u8> {
         let mut cursor = Cursor::new(vec!());
-        repo.load(name, &mut cursor).unwrap();
+        super::load(repo, name, &mut cursor).unwrap();
         return cursor.into_inner();
     }
 
@@ -238,7 +238,7 @@ mod tests {
     fn single_small_file() {
         let mut repo = super::Repo::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        repo.save("fox", &mut Cursor::new(fox)).unwrap();
+        super::save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
         assert_eq!(load(&repo, "fox"), fox);
     }
 
@@ -247,8 +247,8 @@ mod tests {
         let mut repo = super::Repo::new(4);
         let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
         let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
-        repo.save("fox_one", &mut Cursor::new(fox_one)).unwrap();
-        repo.save("fox_two", &mut Cursor::new(fox_two)).unwrap();
+        super::save(&mut repo, "fox_one", &mut Cursor::new(fox_one)).unwrap();
+        super::save(&mut repo, "fox_two", &mut Cursor::new(fox_two)).unwrap();
         assert_eq!(load(&repo, "fox_one"), fox_one);
         assert_eq!(load(&repo, "fox_two"), fox_two);
     }
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn not_found_error() {
         let repo = super::Repo::new(4);
-        let rv = repo.load("no such file", &mut Cursor::new(vec!()));
+        let rv = super::load(&repo, "no such file", &mut Cursor::new(vec!()));
         match rv {
             Err(LoadError::NotFound(NotFoundError{})) => (),
             _ => panic!("should fail with NotFoundError"),
@@ -267,9 +267,9 @@ mod tests {
     fn corrupt_db_error() {
         let mut repo = super::Repo::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
-        repo.save("fox", &mut Cursor::new(fox)).unwrap();
+        super::save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
         repo.blocks.clear();
-        let rv = repo.load("fox", &mut Cursor::new(vec!()));
+        let rv = super::load(&repo, "fox", &mut Cursor::new(vec!()));
         match rv {
             Err(LoadError::CorruptDatabase(CorruptDatabaseError{})) => (),
             _ => panic!("should fail with CorruptDatabase error"),
