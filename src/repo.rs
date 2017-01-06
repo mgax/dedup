@@ -42,11 +42,7 @@ impl Repo {
     }
 
     pub fn save(&mut self, key: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-        let (block_keys, stats) = try!(Deduplicator::store(
-            self.block_size,
-            reader,
-            self,
-        ));
+        let (block_keys, stats) = try!(Deduplicator::store(reader, self));
         self.files.insert(key.to_string(), block_keys);
         return Ok(stats);
     }
@@ -63,7 +59,6 @@ impl Repo {
 }
 
 struct Deduplicator<'a, 'b> {
-    block_size: usize,
     reader: &'a mut Read,
     repo: &'b mut Repo,
     block_keys: Vec<Vec<u8>>,
@@ -84,7 +79,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         let block_size = block.len();
         let block_key = self.hash(&block);
         if ! self.repo.blocks.contains_key(&block_key) {
-            if block.len() == self.block_size {
+            if block.len() == self.repo.block_size {
                 let rollhash = RollingAdler32::from_buffer(&block).hash();
                 self.repo.matches.insert(rollhash);
             }
@@ -125,7 +120,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn consume(&mut self) -> Result<(), SaveError> {
-        let block_size = self.block_size;
+        let block_size = self.repo.block_size;
         let mut buffer: Vec<u8> = Vec::new();
         loop {
             while buffer.len() < block_size {
@@ -158,8 +153,8 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
 
                 match try!(self.next_byte()) {
                     Some(byte) => {
-                        roll.remove(self.block_size,
-                            buffer[buffer.len() - self.block_size]);
+                        roll.remove(block_size,
+                            buffer[buffer.len() - block_size]);
                         buffer.push(byte);
                         roll.update(byte);
                     },
@@ -178,12 +173,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     pub fn store(
-        block_size: usize,
         reader: &'a mut Read,
         repo: &'b mut Repo,
     ) -> Result<(Vec<Vec<u8>>, Stats), SaveError> {
         let mut deduplicator = Deduplicator{
-            block_size: block_size,
             repo: repo,
             reader: reader,
             block_keys: Vec::new(),
