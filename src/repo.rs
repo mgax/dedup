@@ -6,11 +6,41 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use adler32::RollingAdler32;
 
+trait Backend {
+    fn block_size(&self) -> usize;
+    fn write_hash(&mut self, hash: u32);
+    fn contains_hash(&self, hash: u32) -> bool;
+    fn write_block(&mut self, block_id: &Vec<u8>, block: Vec<u8>);
+    fn contains_block(&self, block_id: &Vec<u8>) -> bool;
+}
+
 pub struct Repo {
     block_size: usize,
     blocks: HashMap<Vec<u8>, Vec<u8>>,
     matches: HashSet<u32>,
     files: HashMap<String, Vec<Vec<u8>>>,
+}
+
+impl Backend for Repo {
+    fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    fn write_hash(&mut self, hash: u32) {
+        self.matches.insert(hash);
+    }
+
+    fn contains_hash(&self, hash: u32) -> bool {
+        self.matches.contains(&hash)
+    }
+
+    fn write_block(&mut self, block_id: &Vec<u8>, block: Vec<u8>) {
+        self.blocks.insert(block_id.clone(), block);
+    }
+
+    fn contains_block(&self, block_id: &Vec<u8>) -> bool {
+        self.blocks.contains_key(block_id)
+    }
 }
 
 #[derive(Debug)]
@@ -60,7 +90,7 @@ impl Repo {
 
 struct Deduplicator<'a, 'b> {
     reader: &'a mut Read,
-    repo: &'b mut Repo,
+    backend: &'b mut Backend,
     block_keys: Vec<Vec<u8>>,
     stats: Stats,
 }
@@ -78,12 +108,12 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
         let block_len = block.len();
         if block_len == 0 { return }
         let block_key = self.hash(&block);
-        if ! self.repo.blocks.contains_key(&block_key) {
-            if block_len == self.repo.block_size {
+        if ! self.backend.contains_block(&block_key) {
+            if block_len == self.backend.block_size() {
                 let rollhash = RollingAdler32::from_buffer(&block).hash();
-                self.repo.matches.insert(rollhash);
+                self.backend.write_hash(rollhash);
             }
-            self.repo.blocks.insert(block_key.clone(), block);
+            self.backend.write_block(&block_key, block);
             self.stats.new_blocks += 1;
             self.stats.new_bytes += block_len;
         }
@@ -120,7 +150,7 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn consume(&mut self) -> Result<(), SaveError> {
-        let block_size = self.repo.block_size;
+        let block_size = self.backend.block_size();
         let mut buffer: Vec<u8> = Vec::new();
         loop {
             while buffer.len() < block_size {
@@ -139,10 +169,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
             let mut roll = RollingAdler32::from_buffer(&buffer);
 
             while buffer.len() < 2 * block_size {
-                if self.repo.matches.contains(&roll.hash()) {
+                if self.backend.contains_hash(roll.hash()) {
                     let offset = buffer.len() - block_size;
                     let hash = self.hash(&buffer[offset ..]);
-                    if self.repo.blocks.contains_key(&hash) {
+                    if self.backend.contains_block(&hash) {
                         self.flushn(&mut buffer, offset);
                         break;
                     }
@@ -174,10 +204,10 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
 
     pub fn store(
         reader: &'a mut Read,
-        repo: &'b mut Repo,
+        backend: &'b mut Backend,
     ) -> Result<(Vec<Vec<u8>>, Stats), SaveError> {
         let mut deduplicator = Deduplicator{
-            repo: repo,
+            backend: backend,
             reader: reader,
             block_keys: Vec::new(),
             stats: Stats{
