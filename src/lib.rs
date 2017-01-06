@@ -2,12 +2,13 @@ extern crate crypto;
 extern crate adler32;
 
 pub mod errors;
-pub mod repo;
-pub use repo::MemoryRepo;
+mod memory_repo;
+mod deduplicator;
+
+pub use memory_repo::MemoryRepo;
 pub use errors::{SaveError, LoadError};
 
 use std::io::{Read, Write};
-use repo::Deduplicator;
 
 pub trait Repo {
     fn block_size(&self) -> usize;
@@ -29,7 +30,7 @@ pub struct Stats {
 }
 
 pub fn save(repo: &mut Repo, name: &str, reader: &mut Read) -> Result<Stats, SaveError> {
-    Deduplicator::store(repo, name, reader)
+    deduplicator::Deduplicator::store(repo, name, reader)
 }
 
 pub fn load(repo: &Repo, name: &str, writer: &mut Write) -> Result<(), LoadError> {
