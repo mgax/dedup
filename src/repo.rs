@@ -17,14 +17,14 @@ pub trait Backend {
     fn read_file(&self, name: &str) -> Result<&Vec<Vec<u8>>, LoadError>;
 }
 
-pub struct Repo {
+pub struct MemoryRepo {
     block_size: usize,
     blocks: HashMap<Vec<u8>, Vec<u8>>,
     matches: HashSet<u32>,
     files: HashMap<String, Vec<Vec<u8>>>,
 }
 
-impl Backend for Repo {
+impl Backend for MemoryRepo {
     fn block_size(&self) -> usize {
         self.block_size
     }
@@ -58,9 +58,9 @@ impl Backend for Repo {
     }
 }
 
-impl Repo {
-    pub fn new(block_size: usize) -> Repo {
-        Repo{
+impl MemoryRepo {
+    pub fn new(block_size: usize) -> MemoryRepo {
+        MemoryRepo{
             block_size: block_size,
             blocks: HashMap::new(),
             matches: HashSet::new(),
@@ -228,7 +228,7 @@ mod tests {
     use std::io::Cursor;
     use errors::{LoadError, NotFoundError, CorruptDatabaseError};
 
-    fn load(repo: &super::Repo, name: &str) -> Vec<u8> {
+    fn load(repo: &super::MemoryRepo, name: &str) -> Vec<u8> {
         let mut cursor = Cursor::new(vec!());
         super::load(repo, name, &mut cursor).unwrap();
         return cursor.into_inner();
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn single_small_file() {
-        let mut repo = super::Repo::new(4);
+        let mut repo = super::MemoryRepo::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
         super::save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
         assert_eq!(load(&repo, "fox"), fox);
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn two_small_files() {
-        let mut repo = super::Repo::new(4);
+        let mut repo = super::MemoryRepo::new(4);
         let fox_one = "the quick brown fox jumps over the lazy dog".as_bytes();
         let fox_two = "the qqq brown rabbit jumpd over the lazy dog".as_bytes();
         super::save(&mut repo, "fox_one", &mut Cursor::new(fox_one)).unwrap();
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn not_found_error() {
-        let repo = super::Repo::new(4);
+        let repo = super::MemoryRepo::new(4);
         let rv = super::load(&repo, "no such file", &mut Cursor::new(vec!()));
         match rv {
             Err(LoadError::NotFound(NotFoundError{})) => (),
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn corrupt_db_error() {
-        let mut repo = super::Repo::new(4);
+        let mut repo = super::MemoryRepo::new(4);
         let fox = "the quick brown fox jumps over the lazy dog".as_bytes();
         super::save(&mut repo, "fox", &mut Cursor::new(fox)).unwrap();
         repo.blocks.clear();
