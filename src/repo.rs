@@ -75,21 +75,21 @@ impl<'a, 'b> Deduplicator<'a, 'b> {
     }
 
     fn save(&mut self, block: Vec<u8>) {
-        if block.len() == 0 { return }
-        let block_size = block.len();
+        let block_len = block.len();
+        if block_len == 0 { return }
         let block_key = self.hash(&block);
         if ! self.repo.blocks.contains_key(&block_key) {
-            if block.len() == self.repo.block_size {
+            if block_len == self.repo.block_size {
                 let rollhash = RollingAdler32::from_buffer(&block).hash();
                 self.repo.matches.insert(rollhash);
             }
             self.repo.blocks.insert(block_key.clone(), block);
             self.stats.new_blocks += 1;
-            self.stats.new_bytes += block_size;
+            self.stats.new_bytes += block_len;
         }
         else {
             self.stats.dup_blocks += 1;
-            self.stats.dup_bytes += block_size;
+            self.stats.dup_bytes += block_len;
         }
 
         self.block_keys.push(block_key);
